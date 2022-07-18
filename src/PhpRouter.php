@@ -99,7 +99,7 @@ class PhpRouter {
       }
       else // is string, just one role
       {
-        self::$role_access[$uri] = array($roles); // role_access[uri] is always an array
+        self::$role_access[$uri] = [$roles]; // role_access[uri] is always an array
       }
     }
     // if there are no roles passed, the action is open
@@ -130,7 +130,7 @@ class PhpRouter {
    */
   public static function dispatch($uri = '')
   {
-    global $_BASE;
+    global $_BASE, $jwt_user; // jwt is used to check API access
     // $uri us the requested route that should match wit the items in $routes
     // exactly or using regex matchers
 
@@ -224,26 +224,54 @@ class PhpRouter {
             if (isset(self::$role_access[$uri]))
             {
               $user = \services\AuthService::current_user();
+
               if (!$user) // not logged in
               {
-                // redirect to self::$unauthorized_url
-                // status: 401 unauthorized
-                $_SESSION['flash'] = "You are not authorized to access this section";
-                header("Location: ". self::$unauthorized_url);
-                return;
+                if ($jwt_user == null)
+                {
+                  // redirect to self::$unauthorized_url
+                  // status: 401 unauthorized
+                  $_SESSION['flash'] = "You are not authorized to access this section";
+                  header("Location: ". self::$_base_uri . self::$unauthorized_url);
+                  return;
+                }
+                else // API access should return a payload error
+                {
+                  http_response_code(401);
+                  echo json_encode([
+                    'status'  => 'error',
+                    'message' => 'not authenticated',
+                    'code'    => 'E016'
+                  ]);
+                  return;
+                }
               }
+
               // user is logged in
               $allowed_roles = self::$role_access[$uri];
               if (!in_array($user->get_role(), $allowed_roles)) // is not allowed to access the uri?
               {
-                // redirect to self::$unauthorized_url
-                // status: 403 forbidden
-                $_SESSION['flash'] = "You are not authorized to access this section"; // FIXME: I18N
-                if (isset($_SERVER['HTTP_REFERER'])) // try to redirect to the previous page
-                  header("Location: ". $_SERVER['HTTP_REFERER']);
-                else
-                  header("Location: ". self::$unauthorized_url);
-                return;
+                if ($jwt_user == null)
+                {
+                  // redirect to self::$unauthorized_url
+                  // status: 403 forbidden
+                  $_SESSION['flash'] = "You are not authorized to access this section"; // FIXME: I18N
+                  if (isset($_SERVER['HTTP_REFERER'])) // try to redirect to the previous page
+                    header("Location: ". $_SERVER['HTTP_REFERER']);
+                  else
+                    header("Location: ". self::$_base_uri . self::$unauthorized_url);
+                  return;
+                }
+                else // API access should return a payload error
+                {
+                  http_response_code(403);
+                  echo json_encode([
+                    'status'  => 'error',
+                    'message' => "user role can't access that action",
+                    'code'    => 'E017'
+                  ]);
+                  return;
+                }
               }
             }
 

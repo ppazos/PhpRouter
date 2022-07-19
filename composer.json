@@ -1,0 +1,6 @@
+{
+    "name": "cabolabs/phprouter",
+    "description": "PHP MVC router based on Macaw with some improved features",
+    "minimum-stability": "dev",
+    "require": {}
+}
